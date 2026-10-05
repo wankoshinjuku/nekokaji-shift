@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>シフト提出</title>
+<style>
+  :root { --green:#06C755; --ink:#1f2328; --muted:#6b7280; --line:#e5e7eb; --sat:#e6f1fb; --satink:#185fa5; --sun:#fcebeb; --sunink:#a32d2d; --warn:#fef3da; --warnink:#8a5a00; }
+  * { box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; margin:0; background:#f3f4f6; color:var(--ink); }
+  .wrap { max-width:420px; margin:0 auto; background:#fff; min-height:100vh; }
+  .hd { background:var(--green); color:#073D1C; padding:14px 16px; font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px; }
+  .bd { padding:16px; }
+  label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
+  select, input[type=text], input[type=time] { width:100%; height:38px; padding:6px 10px; font-size:15px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); }
+  .field { margin-bottom:14px; }
+  .banner { background:var(--warn); color:var(--warnink); border-radius:8px; padding:8px 12px; margin-bottom:12px; font-size:12px; }
+  .legend { display:flex; gap:10px; font-size:11px; color:var(--muted); margin:0 2px 10px; align-items:center; }
+  .sw { display:inline-block; width:10px; height:10px; border-radius:2px; vertical-align:-1px; margin-right:3px; }
+  .day { display:flex; align-items:center; gap:8px; padding:8px; margin-bottom:3px; border-radius:6px; border:1px solid transparent; }
+  .day .dl { width:96px; flex:none; font-size:14px; }
+  .day .wd { font-size:12px; }
+  .day .st, .day .en { flex:1; min-width:0; text-align:center; }
+  .sep { color:var(--muted); }
+  .applyall { flex:none; font-size:11px; padding:0 8px; height:34px; border:1px solid var(--line); border-radius:8px; background:#f3f4f6; color:var(--ink); white-space:nowrap; cursor:pointer; }
+  .clearday { flex:none; font-size:11px; padding:0 8px; height:34px; border:1px solid #f0c8c8; border-radius:8px; background:#fdeeee; color:#b3261e; white-space:nowrap; cursor:pointer; }
+  .badge { font-size:10px; background:var(--sunink); color:#fff; border-radius:3px; padding:0 4px; margin-left:4px; }
+  .total { display:flex; justify-content:space-between; align-items:baseline; margin:14px 2px 16px; }
+  .total b { font-size:20px; font-weight:600; }
+  button.go { width:100%; background:var(--green); color:#073D1C; border:none; height:46px; border-radius:8px; font-size:15px; font-weight:600; }
+  button.go:disabled { opacity:.5; }
+  .msg { padding:24px 16px; text-align:center; color:var(--muted); font-size:14px; }
+  .done { padding:32px 20px; text-align:center; }
+  .done .ic { font-size:40px; }
+  .hidden { display:none; }
+  .newname { margin-top:8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hd"><span id="title">シフト提出</span><span id="lang" style="margin-left:auto;font-size:12px;font-weight:400;"></span></div>
+  <div class="bd" id="app"><div class="msg">読み込み中… / Loading…</div></div>
+</div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js" charset="utf-8"></script>
+<script>
+// GitHub Pages 版：画面はここ、データはGASのAPI（Cookieなしfetch）。LINE内でGASを直接開くと「ファイルを開けません」が出るための構成
+var EXEC_URL = "https://script.google.com/macros/s/AKfycbzozO2GBxi822ydQAbMXGzzuiyu8XIoaG1R5vqbOAHZY5Rf8oCEWcNv0Dcb1_6QMzE7nw/exec";
+var LIFF_ID = "2011168699-0b5UvuIo";
+var CFG = null;
+var USER = { displayName:"" };
+var SESSION = "";
+
+var T = {
+  ja: { title:'シフト提出', name:'お名前', period:'提出する期間（受付中）',
+    deadline:'提出期限 ', sheetMissing:'⚠ この期間の週シートが未作成です（管理者が作成すると反映されます）／提出期限 ',
+    legSat:'土', legSun:'日・祝', legBlank:'休む日は空欄でOK', total:'提出する合計時間', unit:'時間',
+    submit:'この期間のシフトを確定', sending:'送信中…', loading:'読み込み中…',
+    noPeriods:'現在、受付中のシフト提出はありません。', loadErr:'設定の取得に失敗しました。',
+    newReg:'＋ 新規登録', newName:'新しい名前を入力', pickName:'お名前を選択（入力）してください',
+    confirmEmpty:'入力された出勤日がありません。空のまま提出しますか？',
+    doneOk1:'シフトを提出しました（', doneOk2:'日分）。ありがとうございました。',
+    deadlineMsg:'この期間は提出期限を過ぎています。管理者にご相談ください。',
+    failMsg:'提出できませんでした。', sendErr:'送信エラー: ',
+    wd:['日','月','火','水','木','金','土'], hol:'祝', applyAll:'全日', clearDay:'休み', authErr:'ログインの有効期限が切れました。画面を開き直してください。', reload:'開き直す', close:'閉じる', doneEmpty:'提出を受け付けました（今回は出勤できる日なし）。ありがとうございました。', nameTaken:'この名前は既に別のアカウントで登録されています。担当者にご連絡ください。', retry:'もう一度お試しください。' },
+  en: { title:'Shift submission', name:'Your name', period:'Submission period (open)',
+    deadline:'Deadline ', sheetMissing:'⚠ The sheet for this period is not ready yet (reflects once admin creates it) / Deadline ',
+    legSat:'Sat', legSun:'Sun/Hol', legBlank:'Leave days off blank', total:'Total hours', unit:' h',
+    submit:'Submit this period', sending:'Sending…', loading:'Loading…',
+    noPeriods:'No shift submission is open right now.', loadErr:'Failed to load settings.',
+    newReg:'＋ Register new', newName:'Enter a new name', pickName:'Please select (enter) your name',
+    confirmEmpty:'No working days entered. Submit empty?',
+    doneOk1:'Submitted (', doneOk2:' day(s)). Thank you.',
+    deadlineMsg:'The deadline for this period has passed. Please contact the admin.',
+    failMsg:'Could not submit.', sendErr:'Send error: ',
+    wd:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], hol:'Hol', applyAll:'All', clearDay:'Off', authErr:'Your login has expired. Please reopen this page.', reload:'Reopen', close:'Close', doneEmpty:'Received (no available days this time). Thank you.', nameTaken:'This name is already registered to another account. Please contact your manager.', retry:'Please try again.' }
+};
+var LANG = 'ja';
+try { LANG = localStorage.getItem('shiftLang') || 'ja'; } catch(e) {}
+function tr(k){ return T[LANG][k]; }
+function setLang(l){ LANG=l; try{localStorage.setItem('shiftLang',l);}catch(e){} renderLangToggle(); if(CFG){ render(); } }
+function renderLangToggle(){
+  var el=document.getElementById('lang'); if(!el) return;
+  function part(l,label){ return '<span data-l="'+l+'" style="cursor:pointer;'+(LANG===l?'font-weight:600;text-decoration:underline;':'opacity:.7;')+'">'+label+'</span>'; }
+  el.innerHTML = part('ja','日本語')+' | '+part('en','EN');
+  var sp=el.querySelectorAll('span'); for(var i=0;i<sp.length;i++){ sp[i].onclick=function(){ setLang(this.getAttribute('data-l')); }; }
+}
+
+function el(tag, attrs, html){ var e=document.createElement(tag); if(attrs) for(var k in attrs) e.setAttribute(k,attrs[k]); if(html!=null) e.innerHTML=html; return e; }
+function toMin(v){ if(!v) return null; var p=v.split(':'); return (+p[0])*60+(+p[1]); }
+function pad2(n){ return ('0'+(n||0)).slice(-2); }
+function normTime(v){
+  v=String(v||'').trim(); if(!v) return '';
+  var h,m;
+  if(v.indexOf(':')>=0){ var p=v.split(':'); h=parseInt(p[0],10); m=parseInt(p[1]||'0',10); }
+  else { var d=v.replace(/[^0-9]/g,''); if(!d) return ''; if(d.length<=2){ h=parseInt(d,10); m=0; } else { h=parseInt(d.slice(0,-2),10); m=parseInt(d.slice(-2),10); } }
+  if(isNaN(h)) return ''; if(isNaN(m)) m=0;
+  h=Math.max(0,Math.min(23,h)); m=Math.max(0,Math.min(59,m));
+  return pad2(h)+':'+pad2(m);
+}
+
+function api(body){
+  // text/plain＝プリフライト無しの単純リクエスト。credentials:'omit'でGoogleのCookieを送らない
+  return fetch(EXEC_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),credentials:'omit',redirect:'follow'})
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
+}
+function showMsg(html){ document.getElementById('app').innerHTML='<div class="msg">'+html+'</div>'; }
+function showErr(text){
+  var app=document.getElementById('app'); app.innerHTML='';
+  app.appendChild(el('div',{class:'msg'},text));
+  var b=el('button',{class:'go'},tr('reload')); b.onclick=function(){ location.reload(); }; app.appendChild(b);
+}
+function boot(){
+  renderLangToggle();
+  showMsg(tr('loading'));
+  liff.init({liffId:LIFF_ID}).then(function(){
+    if(!liff.isLoggedIn()){ liff.login({redirectUri:location.href.split('#')[0]}); return; }
+    return api({action:'config',idToken:liff.getIDToken()}).then(function(res){
+      if(!res.ok){ if(res.reason==='auth'){ liff.logout(); showErr(tr('authErr')); } else showErr(tr('loadErr')); return; }
+      CFG=res.cfg; USER.displayName=res.displayName||''; SESSION=res.session;
+      render();
+    });
+  }).catch(function(e){ showErr(tr('loadErr')+'<br><span style="font-size:11px">'+String(e&&e.message||e)+'</span>'); });
+}
+function showDone(res){
+  var msg, ok=res&&res.ok;
+  if(ok) msg = res.count===0 ? tr('doneEmpty') : tr('doneOk1')+res.count+tr('doneOk2');
+  else if(res&&res.reason==='deadline') msg=tr('deadlineMsg');
+  else if(res&&res.reason==='name_taken') msg=tr('nameTaken');
+  else if(res&&res.reason==='auth') msg=tr('authErr');
+  else msg=tr('failMsg')+tr('retry');
+  var app=document.getElementById('app'); app.innerHTML='';
+  var d=el('div',{class:'done'},'<div class="ic">'+(ok?'✅':'⚠️')+'</div><p style="font-size:16px;line-height:1.7">'+msg+'</p>');
+  app.appendChild(d);
+  var b=el('button',{class:'go'},ok?tr('close'):tr('reload'));
+  b.onclick=function(){ if(ok){ try{ liff.closeWindow(); }catch(e){} } else location.reload(); };
+  app.appendChild(b);
+}
+
+function render(){
+  document.getElementById('title').textContent = CFG.storeName + ' ' + tr('title');
+  var app = document.getElementById('app');
+  app.innerHTML='';
+
+  if (!CFG.periods || CFG.periods.length===0){
+    app.appendChild(el('div',{class:'msg'},tr('noPeriods')));
+    return;
+  }
+
+  var nf = el('div',{class:'field'});
+  nf.appendChild(el('label',null,tr('name')));
+  var mode = CFG.nameMode;
+  if (mode==='自由入力'){
+    nf.appendChild(el('input',{type:'text',id:'name',placeholder:tr('name'),value:CFG.boundName||USER.displayName||''}));
+  } else if (mode==='LINE名自動'){
+    nf.appendChild(el('input',{type:'text',id:'name',value:CFG.boundName||USER.displayName||'',readonly:'readonly'}));
+  } else {
+    var sel = el('select',{id:'name'});
+    (CFG.names||[]).forEach(function(n){ var o=el('option',null,n); o.value=n; if(n===CFG.boundName)o.selected=true; sel.appendChild(o); });
+    nf.appendChild(sel);
+    // 「＋新規登録」は廃止（猫カジ運用：新スタッフは管理者が事前に名簿へ追加）。名前は名簿からの選択のみ。
+  }
+  app.appendChild(nf);
+
+  var pf = el('div',{class:'field'});
+  pf.appendChild(el('label',null,tr('period')));
+  var psel = el('select',{id:'period'});
+  CFG.periods.forEach(function(p,i){ var o=el('option',null,p.label); o.value=i; psel.appendChild(o); });
+  pf.appendChild(psel);
+  app.appendChild(pf);
+
+  app.appendChild(el('div',{class:'banner',id:'dl'},''));
+  app.appendChild(el('div',{class:'legend'},
+    '<span><span class="sw" style="background:var(--sat)"></span>'+tr('legSat')+'</span>'+
+    '<span><span class="sw" style="background:var(--sun)"></span>'+tr('legSun')+'</span>'+
+    '<span>'+tr('legBlank')+'</span>'));
+  var daysDiv = el('div',{id:'days'}); app.appendChild(daysDiv);
+  daysDiv.addEventListener('input', recompute);
+  daysDiv.addEventListener('click', onApplyAll);
+  daysDiv.addEventListener('focusout', function(ev){
+    var t=ev.target; if(t && t.classList && (t.classList.contains('st')||t.classList.contains('en'))){ t.value=normTime(t.value); recompute(); }
+  });
+  app.appendChild(el('div',{class:'total'},'<span style="color:var(--muted);font-size:13px;">'+tr('total')+'</span><b id="total">0'+tr('unit')+'</b>'));
+  var btn = el('button',{class:'go',id:'go'},tr('submit'));
+  app.appendChild(btn);
+
+  psel.addEventListener('change',function(){ buildDays(+psel.value); });
+  btn.addEventListener('click',submit);
+  buildDays(0);
+}
+
+function buildDays(idx){
+  var p = CFG.periods[idx];
+  var dl=document.getElementById('dl');
+  if (p.sheetExists===false){
+    dl.style.background='var(--sun)'; dl.style.color='var(--sunink)';
+    dl.textContent=tr('sheetMissing')+p.deadline;
+  } else {
+    dl.style.background='var(--warn)'; dl.style.color='var(--warnink)';
+    dl.textContent=tr('deadline')+p.deadline;
+  }
+  var box=document.getElementById('days'); box.innerHTML='';
+  p.days.forEach(function(d){
+    var bg='transparent', ink='var(--ink)', bd='var(--line)';
+    if (d.dow===6){ bg='var(--sat)'; ink='var(--satink)'; }
+    if (d.dow===0 || d.holiday){ bg='var(--sun)'; ink='var(--sunink)'; }
+    var row=el('div',{class:'day'}); row.style.background=bg; row.style.borderColor=bg==='transparent'?'var(--line)':'transparent';
+    var badge = d.holiday ? '<span class="badge">'+tr('hol')+' '+d.holiday+'</span>' : '';
+    row.innerHTML =
+      '<div class="dl"><b>'+d.md+'</b> <span class="wd" style="color:'+ink+'">('+tr('wd')[d.dow]+')</span>'+badge+'</div>'+
+      '<input type="text" inputmode="numeric" maxlength="5" placeholder="00:00" data-iso="'+d.iso+'" class="st" value="'+(d.start||'')+'">'+
+      '<span class="sep">〜</span>'+
+      '<input type="text" inputmode="numeric" maxlength="5" placeholder="00:00" class="en" value="'+(d.end||'')+'">'+
+      '<button type="button" class="applyall">'+tr('applyAll')+'</button>'+
+      '<button type="button" class="clearday">'+tr('clearDay')+'</button>';
+    box.appendChild(row);
+  });
+  recompute();
+}
+
+function onApplyAll(ev){
+  // 「休み」ボタン：その日の入力を空にする（提出するとその日は休みになる）
+  var clr = ev.target.closest ? ev.target.closest('.clearday') : null;
+  if(clr){
+    var rowc = clr.closest('.day'); if(!rowc) return;
+    rowc.querySelector('.st').value=''; rowc.querySelector('.en').value='';
+    recompute(); return;
+  }
+  var b = ev.target.closest ? ev.target.closest('.applyall') : null;
+  if(!b) return;
+  var row = b.closest('.day'); if(!row) return;
+  var st=row.querySelector('.st').value, en=row.querySelector('.en').value;
+  document.querySelectorAll('#days .day').forEach(function(r){
+    r.querySelector('.st').value=st; r.querySelector('.en').value=en;
+  });
+  recompute();
+}
+
+function recompute(){
+  var rows=document.querySelectorAll('#days .day'); var m=0;
+  rows.forEach(function(r){ var s=toMin(normTime(r.querySelector('.st').value)), e=toMin(normTime(r.querySelector('.en').value)); if(s!=null&&e!=null&&e>s) m+=(e-s); });
+  var h=Math.round(m/60*10)/10;
+  document.getElementById('total').textContent=(Number.isInteger(h)?h:h.toFixed(1))+tr('unit');
+}
+
+function getName(){
+  var sel=document.getElementById('name');
+  if (sel.tagName==='SELECT'){
+    if (sel.value==='__new__'){ return (document.getElementById('newname').value||'').trim(); }
+    return sel.value;
+  }
+  return (sel.value||'').trim();
+}
+
+function submit(){
+  var name=getName();
+  if(!name){ alert(tr('pickName')); return; }
+  var idx=+document.getElementById('period').value;
+  var p=CFG.periods[idx];
+  var entries=[];
+  document.querySelectorAll('#days .day').forEach(function(r){
+    var iso=r.querySelector('.st').getAttribute('data-iso');
+    var s=normTime(r.querySelector('.st').value), e=normTime(r.querySelector('.en').value);
+    if(s&&e) entries.push({iso:iso,start:s,end:e});
+  });
+  // 0件（出勤できる日なし）でもそのまま登録できるようにする（確認ダイアログはLIFF内で動かないため撤去）
+  var btn=document.getElementById('go'); btn.disabled=true; btn.textContent=tr('sending');
+  var payload={ displayName:USER.displayName, name:name, periodId:p.id, entries:entries, lang:LANG };
+  api({action:'submit',session:SESSION,payload:payload}).then(showDone).catch(function(e){
+    btn.disabled=false; btn.textContent=tr('submit'); alert(tr('sendErr')+String(e&&e.message||e));
+  });
+}
+
+boot();
+</script>
+</body>
+</html>
+
